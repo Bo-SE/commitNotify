@@ -1,3 +1,4 @@
 repos
 .idea
 secrets.py
+data.json

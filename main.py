@@ -5,6 +5,7 @@ from telebotapi import TelegramBot
 from secrets import bot_token
 from time import sleep
 from datetime import datetime, timedelta
+from json import load, dump
 
 
 def exit_empty():
@@ -21,16 +22,19 @@ def escape(string):
     return out
 
 
+def sha(commit):
+    return commit.name_rev.split()[0]
+
+
 def mess(repo, commit):
     repo_url = list(repo.remote().urls)[0].replace('.git', '')
-    repo_sha = commit.name_rev.split()[0]
     body = f"New commit on " \
            f"**[{escape(repo_url.replace('https://github.com/', ''))}]" \
            f"({escape(repo_url)})** " \
-           f"by **{escape(str(commit.committer))}**: {escape(commit.summary)}\n\n" \
+           f"by **{escape(str(commit.committer))}**: *{escape(commit.summary)}*\n\n" \
            f"Full message:\n" \
            f"```\n{escape(commit.message)}```\n" \
-           f"Commit code: [{repo_sha[:7]}]({escape(repo_url)}/commit/{escape(repo_sha)})"
+           f"Commit code: [{sha(commit)[:7]}]({escape(repo_url)}/commit/{escape(sha(commit))})"
     print(body[200:].encode())
     print(body[219].encode())
     print(body)
@@ -59,11 +63,30 @@ if __name__ == "__main__":
     for i in folds:
         repos.append(Repo.init(join("repos", i)))
 
+    if not exists("data.json"):
+        dump({}, open("data.json", "w+"))
+    data = load(open("data.json"))
+
+    def ddump():
+        dump(data, open("data.json", "w+"))
+
+
     while True:
         for i in repos:
-            latest_commit = i.commit()
+            if i.git_dir not in data:
+                data[i.git_dir] = sha(i.commit())
+                tracked = i.commit()
+                ddump()
+            else:
+                tracked = i.commit(data[i.git_dir])
+
             i.remote().pull()
-            for j in i.iter_commits(since=latest_commit.committed_date + 1):
-                mess(i, j)
+
+            if data[i.git_dir] != sha(i.commit()):
+                for j in i.iter_commits(since=tracked.committed_date + 1):
+                    mess(i, j)
+                data[i.git_dir] = sha(i.commit())
+                ddump()
+
         print(f"Next check will occur on {datetime.now() + timedelta(seconds=120)}")
         sleep(30)
