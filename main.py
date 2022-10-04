@@ -35,9 +35,6 @@ def mess(repo, commit):
            f"Full message:\n" \
            f"```\n{escape(commit.message)}```\n" \
            f"Commit code: [{sha(commit)[:7]}]({escape(repo_url)}/commit/{escape(sha(commit))})"
-    print(body[200:].encode())
-    print(body[219].encode())
-    print(body)
     t.sendMessage(
         GROUP,
         body,
@@ -48,45 +45,49 @@ GROUP = TelegramBot.Chat.by_id(-898976111)
 
 
 if __name__ == "__main__":
-    t = TelegramBot(bot_token, safe_mode=True)
-    t.bootstrap()
+    try:
+        t = TelegramBot(bot_token, safe_mode=True)
+        t.bootstrap()
 
-    if not exists("repos"):
-        mkdir("repos")
-        exit_empty()
+        if not exists("repos"):
+            mkdir("repos")
+            exit_empty()
 
-    repos = []
-    folds = listdir("repos")
-    if not folds:
-        exit_empty()
+        repos = []
+        folds = listdir("repos")
+        if not folds:
+            exit_empty()
 
-    for i in folds:
-        repos.append(Repo.init(join("repos", i)))
+        for i in folds:
+            repos.append(Repo.init(join("repos", i)))
 
-    if not exists("data.json"):
-        dump({}, open("data.json", "w+"))
-    data = load(open("data.json"))
-
-    def ddump():
-        dump(data, open("data.json", "w+"))
+        if not exists("data.json"):
+            dump({}, open("data.json", "w+"))
+        data = load(open("data.json"))
 
 
-    while True:
-        for i in repos:
-            if i.git_dir not in data:
-                data[i.git_dir] = sha(i.commit())
-                tracked = i.commit()
-                ddump()
-            else:
-                tracked = i.commit(data[i.git_dir])
+        def ddump():
+            dump(data, open("data.json", "w+"))
 
-            i.remote().pull()
 
-            if data[i.git_dir] != sha(i.commit()):
-                for j in i.iter_commits(since=tracked.committed_date + 1):
-                    mess(i, j)
-                data[i.git_dir] = sha(i.commit())
-                ddump()
+        while True:
+            for i in repos:
+                if i.git_dir not in data:
+                    data[i.git_dir] = sha(i.commit())
+                    tracked = i.commit()
+                    ddump()
+                else:
+                    tracked = i.commit(data[i.git_dir])
 
-        print(f"Next check will occur on {datetime.now() + timedelta(seconds=120)}")
-        sleep(30)
+                i.remote().pull()
+
+                if data[i.git_dir] != sha(i.commit()):
+                    for j in i.iter_commits(since=tracked.committed_date + 1):
+                        mess(i, j)
+                    data[i.git_dir] = sha(i.commit())
+                    ddump()
+
+            print(f"Next check will occur on {datetime.now() + timedelta(seconds=120)}")
+            sleep(30)
+    except KeyError:
+        print("Waiting for telegram to exit...")
