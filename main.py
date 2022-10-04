@@ -89,5 +89,5 @@ if __name__ == "__main__":
 
             print(f"Next check will occur on {datetime.now() + timedelta(seconds=120)}")
             sleep(30)
-    except KeyError:
+    except KeyboardInterrupt:
         print("Waiting for telegram to exit...")
