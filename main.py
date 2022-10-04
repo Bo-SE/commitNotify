@@ -31,7 +31,7 @@ def mess(repo, commit):
     body = f"New commit on " \
            f"**[{escape(repo_url.replace('https://github.com/', ''))}]" \
            f"({escape(repo_url)})** " \
-           f"by **{escape(str(commit.committer))}**: *{escape(commit.summary)}*\n\n" \
+           f"by **{escape(str(commit.committer))}**: _{escape(commit.summary)}_\n\n" \
            f"Full message:\n" \
            f"```\n{escape(commit.message)}```\n" \
            f"Commit code: [{sha(commit)[:7]}]({escape(repo_url)}/commit/{escape(sha(commit))})"
