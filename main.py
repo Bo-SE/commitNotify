@@ -1,4 +1,5 @@
 from git.repo import Repo
+from git.exc import GitCommandError
 from os import mkdir, listdir
 from os.path import exists, join
 from telebotapi import TelegramBot
@@ -26,11 +27,11 @@ def sha(commit):
     return commit.name_rev.split()[0]
 
 
-def mess(repo, commit):
+def mess(repo, commit, branch):
     repo_url = list(repo.remote().urls)[0].replace('.git', '')
     body = f"New commit on " \
            f"**[{escape(repo_url.replace('https://github.com/', ''))}]" \
-           f"({escape(repo_url)})** " \
+           f"({escape(repo_url)})** inside branch **{escape(branch)}** " \
            f"by **{escape(str(commit.committer))}**: _{escape(commit.summary)}_\n\n" \
            f"Full message:\n" \
            f"```\n{escape(commit.message)}```\n" \
@@ -58,8 +59,8 @@ if __name__ == "__main__":
         if not folds:
             exit_empty()
 
-        for i in folds:
-            repos.append(Repo.init(join("repos", i)))
+        for r in folds:
+            repos.append(Repo.init(join("repos", r)))
 
         if not exists("data.json"):
             dump({}, open("data.json", "w+"))
@@ -71,21 +72,42 @@ if __name__ == "__main__":
 
 
         while True:
-            for i in repos:
-                if i.git_dir not in data:
-                    data[i.git_dir] = sha(i.commit())
-                    tracked = i.commit()
-                    ddump()
+            for r in repos:
+                if r.git_dir not in data:
+                    data[r.git_dir] = {}
                 else:
-                    tracked = i.commit(data[i.git_dir])
+                    # backward compatibility conversion
+                    if isinstance(data[r.git_dir], str):
+                        data[r.git_dir] = {r.active_branch.name: data[r.git_dir]}
+                        ddump()
+                for b, b_name in map(lambda l: (l, l.name), r.refs):
+                    if b_name == "origin/HEAD":
+                        continue
+                    if "origin/" in str(b_name):
+                        b_name = b_name.split("/")[-1]
+                    if b != r.active_branch:
+                        r.git.checkout(b_name)
+                    if b_name not in data[r.git_dir]:
+                        data[r.git_dir][b_name] = sha(b.commit)
+                        tracked = r.commit()
+                        ddump()
+                    else:
+                        tracked = r.commit(data[r.git_dir][b_name])
 
-                i.remote().pull()
+                    while True:
+                        try:
+                            r.remote().pull()
+                            break
+                        except GitCommandError as e:
+                            print("GitCommandError occurred:")
+                            print(e)
+                        sleep(5)
 
-                if data[i.git_dir] != sha(i.commit()):
-                    for j in i.iter_commits(since=tracked.committed_date + 1):
-                        mess(i, j)
-                    data[i.git_dir] = sha(i.commit())
-                    ddump()
+                    if data[r.git_dir][b_name] != sha(r.commit()):
+                        for j in r.iter_commits(since=tracked.committed_date + 1):
+                            mess(r, j, b_name)
+                        data[r.git_dir][b_name] = sha(r.commit())
+                        ddump()
 
             print(f"Next check will occur on {datetime.now() + timedelta(seconds=120)}")
             sleep(30)
